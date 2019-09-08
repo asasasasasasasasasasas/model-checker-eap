@@ -127,7 +127,7 @@ LTLSPEC G (oldState = sNone & tempState = sMonitorIn -> X newState = sKill);
 -- Non authorized memory access
 LTLSPEC G (newState = sKill -> X reset = true);
 
-LTLSPEC G ((newState = sNone) & ((Daddr < MML) & (Daddr >= MMS)) & X reset = false);
+LTLSPEC G ((newState = sNone) & ((Daddr < MML) & (Daddr >= MMS)) -> X reset = true);
 LTLSPEC G ((newState = sNone) & ((Daddr < DML) & (Daddr >= DMS)) -> X reset = true);
 
 LTLSPEC G ((newState = sDzoneIn) & ((Daddr < MML) & (Daddr >= MMS)) -> X reset = true);
