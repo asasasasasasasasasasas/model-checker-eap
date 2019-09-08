@@ -1,0 +1,145 @@
+MODULE main
+
+VAR
+	pc				: 0 .. 1200;
+	Daddr			: 2000 .. 2600;
+	reset     : {true, false, rinit};
+	eap_t			: eap(pc, Daddr, reset);
+
+ASSIGN
+	init(reset) 		:= rinit;
+
+
+MODULE eap(pc, Daddr, reset)
+
+VAR
+	--pc    		: 0 .. 1200;
+	oldState  : {sNone, sRomEnt, sRomIn, sMonitorEnt, sDzoneEnt, sMonitorIn, sDzoneIn, sKill, sInit};
+	tempState : {sNone, sRomEnt, sRomIn, sMonitorEnt, sDzoneEnt, sMonitorIn, sDzoneIn, sKill, sInit};
+	newState  : {sNone, sRomEnt, sRomIn, sMonitorEnt, sDzoneEnt, sMonitorIn, sDzoneIn, sKill, sInit};
+	--reset     : {true, false, rinit};
+
+DEFINE
+	-- text section
+	RCE:=0; -- root start
+	RCS:=4;
+	RCL:=100;
+	MCE:=200; -- monitor start
+	MCS:=250;
+	MCL:=400;
+	DCE:=600; -- dzones start
+	DCS:=650;
+	DCL:=800;
+	-- data section
+	MMS:=2000; -- security monitor start
+	MML:=2200;
+	DMS:=2200; -- dzones start
+	DML:=2400;
+
+
+ASSIGN
+
+	init(oldState) 	:= sInit;
+	init(tempState) := sInit;
+	init(newState) 	:= sInit;
+	--init(reset) 		:= rinit;
+
+
+--	next(pc) 		:= case
+--							pc >= 1196 : 0;
+--							TRUE : pc + 4;
+--							esac;
+
+
+	next(tempState) 	:= case
+										((pc < RCS) & (pc >= RCE))	: sRomEnt;
+										((pc < RCL) & (pc >= RCS))	: sRomIn;
+										((pc < MCS) & (pc >= MCE))	: sMonitorEnt;
+										((pc < MCL) & (pc >= MCS))	: sMonitorIn;
+										((pc < DCS) & (pc >= DCE))	: sDzoneEnt;
+										((pc < DCL) & (pc >= DCS)) 	: sDzoneIn;
+										TRUE : sNone;
+										esac;
+
+	next(newState) 		:= case
+										(oldState = sInit) & (next(tempState) = sRomEnt) 						: sRomEnt;
+										(oldState = sRomEnt) & (next(tempState) = sRomIn) 					: sRomIn;
+										(oldState = sRomIn) & (next(tempState) = sRomIn) 						: sRomIn;
+
+										(oldState = sMonitorEnt) & (next(tempState) = sMonitorIn) 	: sMonitorIn;
+										(oldState = sMonitorEnt) & (next(tempState) = sMonitorEnt) 	: sMonitorEnt;
+										(oldState = sMonitorEnt) & (next(tempState) = sNone) 				: sNone;
+										(oldState = sMonitorEnt) & (next(tempState) = sDzoneIn) 		: sDzoneIn;
+
+										(oldState = sMonitorIn) & (next(tempState) = sMonitorIn) 		: sMonitorIn;
+										(oldState = sMonitorIn) & (next(tempState) = sMonitorEnt) 	: sMonitorEnt;
+
+										(oldState = sDzoneEnt) & (next(tempState) = sDzoneEnt) 			: sDzoneEnt;
+										(oldState = sDzoneEnt) & (next(tempState) = sDzoneIn) 			: sDzoneIn;
+										(oldState = sDzoneEnt) & (next(tempState) = sNone) 					: sNone;
+
+										(oldState = sDzoneIn) & (next(tempState) = sDzoneIn) 				: sDzoneIn;
+										(oldState = sDzoneIn) & (next(tempState) = sDzoneEnt)				: sDzoneEnt;
+										(oldState = sDzoneIn) & (next(tempState) = sMonitorEnt)			: sMonitorEnt;
+
+										(oldState = sNone) & (next(tempState) = sNone) 							: sNone;
+										(oldState = sNone) & (next(tempState) = sMonitorEnt) 				: sMonitorEnt;
+										(oldState = sNone) & (next(tempState) = sDzoneEnt) 					: sDzoneEnt;
+
+										(oldState = sInit) & (next(tempState) = sNone) 							: sNone;
+										(oldState = sInit) & (next(tempState) = sMonitorEnt) 				: sMonitorEnt;
+										(oldState = sInit) & (next(tempState) = sDzoneEnt) 					: sDzoneEnt;
+										(oldState = sInit) & (next(tempState) = sDzoneIn) 					: sDzoneIn;
+										(oldState = sInit) & (next(tempState) = sMonitorIn) 				: sMonitorIn;
+										TRUE : sKill;
+										esac;
+
+	next(oldState) 		:= next(newState);
+
+	next(reset) 			:= case
+										reset = true : true;
+										(next(newState) = sKill) : true;
+										(next(newState) = sNone) & ((next(Daddr) < MML) & (next(Daddr) >= MMS)) : true;
+										(next(newState) = sNone) & ((next(Daddr) < DML) & (next(Daddr) >= DMS)) : true;
+										(next(newState) = sDzoneIn) & ((next(Daddr) < MML) & (next(Daddr) >= MMS)) : true;
+										(next(newState) = sDzoneEnt) & ((next(Daddr) < DML) & (next(Daddr) >= DMS)) : true;
+										(next(newState) = sDzoneEnt) & ((next(Daddr) < MML) & (next(Daddr) >= MMS)) : true;
+										(next(newState) = sMonitorEnt) & ((next(Daddr) < MML) & (next(Daddr) >= MMS)) : true;
+										(next(newState) = sMonitorEnt) & ((next(Daddr) < DML) & (next(Daddr) >= DMS)) : true;
+										TRUE : false;
+										esac;
+
+
+-- Non authorized transition
+LTLSPEC G((oldState = sInit) & tempState != sRomEnt) -> X(newState=sKill);
+LTLSPEC G((oldState = sRomEnt) & tempState != sRomIn) -> X(newState=sKill);
+
+LTLSPEC G (oldState = sMonitorIn & tempState = sNone -> X newState = sKill);
+LTLSPEC G (oldState = sMonitorIn & tempState = sDzoneIn -> X newState = sKill);
+
+LTLSPEC G (oldState = sDzoneIn & tempState = sNone -> X newState = sKill);
+LTLSPEC G (oldState = sDzoneIn & tempState = sMonitorIn -> X newState = sKill);
+
+LTLSPEC G (oldState = sNone & tempState = sDzoneIn -> X newState = sKill);
+LTLSPEC G (oldState = sNone & tempState = sMonitorIn -> X newState = sKill);
+
+
+-- Non authorized memory access
+LTLSPEC G (newState = sKill -> X reset = true);
+
+LTLSPEC G ((newState = sNone) & ((Daddr < MML) & (Daddr >= MMS)) & X reset = false);
+LTLSPEC G ((newState = sNone) & ((Daddr < DML) & (Daddr >= DMS)) -> X reset = true);
+
+LTLSPEC G ((newState = sDzoneIn) & ((Daddr < MML) & (Daddr >= MMS)) -> X reset = true);
+LTLSPEC G ((newState = sDzoneEnt) & ((Daddr < MML) & (Daddr >= MMS)) -> X reset = true);
+LTLSPEC G ((newState = sDzoneEnt) & ((Daddr < DML) & (Daddr >= DMS)) -> X reset = true);
+
+LTLSPEC G ((newState = sMonitorEnt) & ((Daddr < MML) & (Daddr >= MMS)) -> X reset = true);
+LTLSPEC G ((newState = sMonitorEnt) & ((Daddr < DML) & (Daddr >= DMS)) -> X reset = true);
+
+
+
+LTLSPEC G ((oldState = sNone) & ((pc < MCL) & (pc >= MCS)) -> X newState = sKill);
+
+
+LTLSPEC  (G (oldState = sMonitorIn & next(tempState) = sMonitorEnt) -> F next(newState) = sDzoneEnt);
