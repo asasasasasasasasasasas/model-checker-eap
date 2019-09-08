@@ -13,11 +13,10 @@ ASSIGN
 MODULE eap(pc, Daddr, reset)
 
 VAR
-	--pc    		: 0 .. 1200;
 	oldState  : {sNone, sRomEnt, sRomIn, sMonitorEnt, sDzoneEnt, sMonitorIn, sDzoneIn, sKill, sInit};
 	tempState : {sNone, sRomEnt, sRomIn, sMonitorEnt, sDzoneEnt, sMonitorIn, sDzoneIn, sKill, sInit};
 	newState  : {sNone, sRomEnt, sRomIn, sMonitorEnt, sDzoneEnt, sMonitorIn, sDzoneIn, sKill, sInit};
-	--reset     : {true, false, rinit};
+
 
 DEFINE
 	-- text section
@@ -42,13 +41,8 @@ ASSIGN
 	init(oldState) 	:= sInit;
 	init(tempState) := sInit;
 	init(newState) 	:= sInit;
-	--init(reset) 		:= rinit;
 
 
---	next(pc) 		:= case
---							pc >= 1196 : 0;
---							TRUE : pc + 4;
---							esac;
 
 
 	next(tempState) 	:= case
